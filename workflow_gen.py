@@ -14,13 +14,13 @@ from environments.gsm8k import GSM8KEnv
 from environments.math import MATHEnv
 
 parser = argparse.ArgumentParser(description='N-turn evaluation for Intercode environment')
-parser.add_argument('--data_path', type=str, default="/Users/yxqu/Desktop/CMU/Research/Self-Imrovement/data/gsm8k/demo.jsonl", help='path to dataset to evaluate on')
+parser.add_argument('--data_path', type=str, default="data/math/train.jsonl", help='path to dataset to evaluate on')
 parser.add_argument('--dialogue_limit', type=int, default=20, help='maximum number of turns in the policy\'s dialogue to keep')
-parser.add_argument('--env', choices=['gsm8k', 'math'], default="gsm8k", help='environment to run eval on')
-parser.add_argument('--log_dir', type=str, default="./", help='folder to save experiment run log file to')
-parser.add_argument('--max_turns', type=int, default=5, help='max number of interaction turns')
+parser.add_argument('--env', choices=['gsm8k', 'math'], default="math", help='environment to run eval on')
+parser.add_argument('--log_dir', type=str, default="log/math", help='folder to save experiment run log file to')
+parser.add_argument('--max_turns', type=int, default=2, help='max number of interaction turns')
 parser.add_argument('--models', nargs='+', type=str, help="models to use for policy")
-parser.add_argument('--controller_address', type=str, default="21002", help="model to use for policy")
+parser.add_argument('--controller_address', type=str, default="8000", help="model to use for policy")
 parser.add_argument('--num_of_samples', nargs='+', type=int, help='number of actions generated each turn')
 parser.add_argument('--verbose', action='store_true', help="print out logs")
 

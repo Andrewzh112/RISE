@@ -7,10 +7,11 @@ from utils import CompletionGPT, ChatGPT, DIALOGUES
 import requests
 import os, json, sys, time, re, math, random, datetime, argparse, requests
 from typing import List, Dict, Any, Union
+from openai import OpenAI
 
 # import TimeoutException
 from requests.exceptions import Timeout, ConnectionError
-from fastchat.model.model_adapter import get_conversation_template
+# from fastchat.model.model_adapter import get_conversation_template
 
 import copy
 
@@ -78,11 +79,15 @@ class FastChatAgent(Agent):
         self.temperature = temperature
         self.max_new_tokens = max_new_tokens
         self.top_p = top_p
-        self.prompter = Prompter.get_prompter(prompter)
+        # self.prompter = Prompter.get_prompter(prompter)
         self.args = args or {}
+        self.client = OpenAI(
+            base_url=f"{controller_address}/v1/", # TODO how about multiple?
+            api_key="token-abc123",
+        )
         super().__init__(**kwargs)
 
-    def inference(self, history: List[dict]) -> str:
+    def inference(self, history: List[dict], n: int) -> str:
         if self.worker_address:
             worker_addr = self.worker_address
         else:
@@ -91,54 +96,57 @@ class FastChatAgent(Agent):
         if worker_addr == "":
             return
         gen_params = {
-            "model": self.model_name,
+            # "model": self.model_name,
             "temperature": self.temperature,
-            "max_new_tokens": self.max_new_tokens,
-            "echo": False,
+            "max_tokens": self.max_new_tokens,
+            # "echo": False,
             "top_p": self.top_p,
+            "n": n,
             **self.args
         }
-        if self.prompter:
-            prompt = self.prompter(history)
-            gen_params.update(prompt)
-        else:
-            conv = get_conversation_template(self.model_name)
+        gen_params.update()
+        # if self.prompter:
+        #     prompt = self.prompter(history)
+        #     gen_params.update(prompt)
+        # else:
+        #     conv = get_conversation_template(self.model_name)
 
-            for history_item in history:
-                role = history_item["role"]
-                content = history_item["content"]
-                if role == "user" or role == "system":
-                    conv.append_message(conv.roles[0], content)
-                elif role == "agent":
-                    conv.append_message(conv.roles[1], content)
-                else:
-                    raise ValueError(f"Unknown role: {role}")
-            if history[-1]["role"] == conv.roles[1]:
-                print("finish agent's response")
-            else:
-                print("generate a new response")
-                conv.append_message(conv.roles[1], None)
-            prompt = conv.get_prompt()
-            gen_params.update({
-                "prompt": prompt,
-                "stop": conv.stop_str,
-                "stop_token_ids": conv.stop_token_ids,
-            })
-        headers = {"User-Agent": "FastChat Client"}
+        #     for history_item in history:
+        #         role = history_item["role"]
+        #         content = history_item["content"]
+        #         if role == "user" or role == "system":
+        #             conv.append_message(conv.roles[0], content)
+        #         elif role == "agent":
+        #             conv.append_message(conv.roles[1], content)
+        #         else:
+        #             raise ValueError(f"Unknown role: {role}")
+        #     if history[-1]["role"] == conv.roles[1]:
+        #         print("finish agent's response")
+        #     else:
+        #         print("generate a new response")
+        #         conv.append_message(conv.roles[1], None)
+        #     prompt = conv.get_prompt()
+        #     gen_params.update({
+        #         "prompt": prompt,
+        #         "stop": conv.stop_str,
+        #         "stop_token_ids": conv.stop_token_ids,
+        #     })
+        # headers = {"User-Agent": "FastChat Client"}
         for _ in range(3):
             try:
-                response = requests.post(
-                    controller_addr + "/worker_generate_stream",
-                    headers=headers,
-                    json=gen_params,
-                    stream=True,
-                    timeout=120,
+                completion = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=history,
+                    **gen_params
                 )
-                text = ""
-                for line in response.iter_lines(decode_unicode=False, delimiter=b"\0"):
-                    if line:
-                        text = json.loads(line)["text"]
-                return text
+                # response = requests.post(
+                #     controller_addr + '/generate',
+                #     headers=headers,
+                #     json=gen_params,
+                #     stream=False,
+                #     timeout=120,
+                # )
+                return [choice.message.content for choice in completion.choices]
             # if timeout or connection error, retry
             except Timeout: 
                 print("Timeout, retrying...")
@@ -207,10 +215,11 @@ class FastChatPolicy(BasePolicy):
         if self.dialogue_limit and len(self.dialogue) - 2 > self.dialogue_limit:
             self.dialogue = self.dialogue[:2] + self.dialogue[-self.dialogue_limit:]
 
-        actions = []
-        for i in range(num_of_samples):
-            raw_actions = self.agent.inference(self.dialogue)
-            action = raw_actions[0] if isinstance(raw_actions, list) else raw_actions
-            # if action not in actions:
-            actions.append(action)
+        # actions = []
+        actions = self.agent.inference(self.dialogue, num_of_samples)
+        # for i in range(num_of_samples):
+        #     raw_actions = self.agent.inference(self.dialogue, num_of_samples)
+        #     action = raw_actions[0] if isinstance(raw_actions, list) else raw_actions
+        #     # if action not in actions:
+        #     actions.append(action)
         return actions
